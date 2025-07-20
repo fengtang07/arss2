@@ -1,90 +1,206 @@
-# ARSS2 - Autonomous Robotics Scene Synthesizer
+# VLM Scene Architect - Autonomous Vision-Language Model Agent
 
-A system that allows you to create 3D scenes in Unity using natural language commands powered by OpenAI's GPT-4.
+🤖 **A self-critical AI agent that creates, simulates, and visually verifies 3D scenes in Unity using natural language commands.**
 
-## How It Works
-1. **User** types natural language commands in a web interface (e.g., "create a red cube at the origin")
-2. **Python Agent** uses OpenAI API to convert text into structured JSON commands
-3. **Unity** receives and executes these commands to manipulate 3D objects in real-time
+## ✨ **What Makes This Special**
 
-## 🚀 Quick Start (READY TO USE!)
+- **🔍 Vision-Powered Verification**: Uses GPT-4o vision to actually SEE and verify what it creates
+- **🔄 Forced Iteration**: Never accepts failure - keeps improving until vision confirms success  
+- **🌐 GLB Model Integration**: Downloads real 3D models from the web (KhronosGroup/Sketchfab)
+- **🎯 Self-Critical**: Detects when "bird" ≠ "fox" and automatically fixes it
+- **⚡ Real-time Unity Integration**: Live 3D scene manipulation with instant feedback
 
-### ✅ All Dependencies Installed & Configured
-- Python environment: Ready
-- OpenAI API key: Set and working
-- Dependencies: Flask, OpenAI, requests all installed
+## 🚀 **Quick Start (COMPLETE SYSTEM)**
 
-### 🎮 Unity Setup (Required)
-1. Create a new Unity 3D project (or open existing)
-2. Copy `HttpServer.cs` and `SceneBuilder.cs` to `Assets/Scripts/`
-3. Create an empty GameObject named "SceneManager"
-4. Add both scripts as components to this GameObject
-5. **Press Play** - You should see: `[HttpServer] Server started and listening on http://127.0.0.1:8080/`
+### **✅ Prerequisites**
+- Python 3.8+ with pip
+- Unity 2021.3 LTS or later
+- OpenAI API key (GPT-4o vision access)
 
-### 🚀 Run the System
-**Option 1: Easy Script**
+### **🐍 Python Setup**
 ```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set your OpenAI API key as environment variable
+export OPENAI_API_KEY="your-openai-api-key-here"
+# Or for Windows: set OPENAI_API_KEY=your-openai-api-key-here
+```
+
+### **🎮 Unity Setup** 
+1. **Create Unity 3D project**
+2. **Copy C# scripts to `Assets/Scripts/`:**
+   - `HttpServer.cs` - Unity HTTP API server
+   - `SceneController.cs` - Scene management & object spawning  
+   - `CommandModels.cs` - Data structures
+3. **Create empty GameObject → Add all 3 scripts as components**
+4. **Press Play** ▶️ - Console shows: `Server started on http://127.0.0.1:8080/`
+
+### **🌐 Run the VLM Agent**
+```bash
+# Start the system
+python main.py
+
+# Or use run script
 ./run.sh
 ```
+**→ Open browser: `http://localhost:5004`** (auto-detects available port)
 
-**Option 2: Manual**
-```bash
-source .venv/bin/activate
-python vlm_scene_architect_agent.py
-```
-
-### 🌐 Use the System
-1. Open browser: **http://127.0.0.1:5001**
-2. Type commands like:
-   - "Create a red cube at the origin"
-   - "Place a blue sphere at x=5, y=2, z=0" 
-   - "Make a tall green cylinder and a wide yellow plane"
-   - "Clear the scene"
-
-## System Architecture
+## 🎯 **How It Works**
 
 ```
-[Web Browser] → [Python Flask Server] → [OpenAI API] → [Unity HTTP Server] → [3D Scene]
-     ↑                    ↓                              ↓                       ↓
-  User Input         JSON Commands                  Scene Manipulation    Visual Result
+User Prompt → Agent Plans → Downloads GLB Models → Spawns Objects → 
+Vision Analysis → Self-Evaluation → Iteration (if needed) → Success ✅
 ```
 
-## Supported Commands
-- **spawn**: Creates objects (cube, sphere, capsule, cylinder, plane)
-- **clear_scene**: Removes all objects
-- **Positioning**: Use coordinates like "at x=5, y=2, z=0"
-- **Colors**: "red", "blue", "green", etc.
-- **Scaling**: "tall", "wide", "small", "large"
+### **🔍 Verification Loop**
+1. **Agent creates scene** using tools
+2. **Vision analysis** captures Unity screenshot  
+3. **Self-verification** compares vision vs request
+4. **If mismatch detected** → automatically iterate and improve
+5. **Only stops when vision confirms success**
 
-## Troubleshooting
+## 🛠️ **Agent Capabilities**
 
-**Python agent won't start:**
-- Check your OpenAI API key is set
-- Ensure virtual environment is activated
+### **🎨 Object Creation**
+- **Primitives**: Cubes, spheres, cylinders with custom colors/positions
+- **GLB Models**: Downloads real 3D models (fox, bottles, lamps, etc.)
+- **Scene Management**: Clear, lighting, camera control
 
-**Unity not receiving commands:**
-- Make sure Unity is in Play Mode
-- Check Unity Console for HTTP server messages
-- Verify both scripts are attached to the same GameObject
+### **🧠 Smart Tools**
+- `spawn_object` - Create colored primitives or GLB models  
+- `search_web_for_3d_model` - Find models on web
+- `download_and_import_model` - Get GLB files into Unity
+- `capture_and_analyze_scene` - GPT-4o vision analysis
+- `clear_scene` - Reset environment
+- `run_simulation_and_get_results` - Physics simulation
 
-**Commands not working:**
-- Check the web browser console for errors
-- Verify Unity Console for command processing logs
+### **📊 Vision Analysis**
+- Real OpenAI GPT-4o vision calls (not mocked!)
+- Detailed object identification and positioning
+- Color, shape, and arrangement verification
+- Honest reporting of what's actually visible
 
-## Example Session
+## 🎮 **Example Sessions**
+
+### **Basic Scene Creation**
 ```
-User: "Create a red cube at the origin and a blue sphere above it"
-→ Unity creates a red cube at (0,0,0) and blue sphere at (0,2,0)
-
-User: "Add a green plane as the floor"
-→ Unity adds a green plane at ground level
-
-User: "Clear the scene"
-→ Unity removes all objects
+User: "Create a red robot, yellow target, and blue obstacle"
+→ Agent creates colored cubes/spheres
+→ Vision verifies colors and positions
+→ ✅ Success confirmed
 ```
 
-## Files
-- `vlm_scene_architect_agent.py` - Python Flask web server with OpenAI integration
-- `HttpServer.cs` - Unity HTTP server for receiving commands
-- `SceneBuilder.cs` - Unity scene manipulation logic
-- `requirements.txt` - Python dependencies
+### **GLB Model Scene**  
+```
+User: "Clear the scene, then create a fox next to a green tree"
+→ Agent downloads Low Poly Fox GLB
+→ Creates green cylinder "tree"  
+→ Vision analysis: "stylized fox-like shape alongside green tree"
+→ ✅ Iteration successful
+```
+
+### **Self-Correction Example**
+```
+User: "Place a fox model in the scene"
+→ Agent spawns model
+→ Vision: "appears to be a bird-like object"
+→ 🔄 Agent detects mismatch, tries different positioning
+→ Vision: "orange and white fox with distinct features" 
+→ ✅ Success after iteration
+```
+
+## 📁 **File Structure**
+
+### **🐍 Core Python Files**
+```
+agent.py          # Main VLM agent with forced iteration
+tools.py          # All tool definitions and implementations  
+main.py           # Flask web server and UI
+config.py         # API keys and configuration
+```
+
+### **🎮 Unity C# Scripts**
+```
+HttpServer.cs      # Unity HTTP API endpoints
+SceneController.cs # Object spawning and scene management
+CommandModels.cs   # Data structures for commands
+```
+
+### **📚 Documentation**
+```
+README.md         # This file
+UNITY_SETUP.md    # Unity configuration guide
+requirements.txt  # Python dependencies
+```
+
+## 🔧 **Advanced Features**
+
+### **🎯 Forced Iteration System**
+- Agent **cannot** declare success until vision confirms it
+- Automatic failure detection (e.g., "bird" when "fox" requested)
+- Progressive improvement with multiple attempts
+- Self-critical evaluation at every step
+
+### **🌐 Web Model Integration**
+- KhronosGroup sample models (fox, bottles, lamps)
+- Automatic GLB download and Unity import
+- Model caching to avoid re-downloads
+- Fallback to primitives when models unavailable
+
+### **👁️ Vision Verification**
+- Screenshot capture from Unity scene
+- GPT-4o detailed visual analysis
+- Object identification and positioning
+- Color and shape verification
+- Arrangement and spatial relationship detection
+
+## 🚨 **Troubleshooting**
+
+### **❌ Common Issues**
+
+**"HTTP 500 Internal Server Error"**
+- Check OpenAI API key is set: `echo $OPENAI_API_KEY` (should show your key)
+- Verify Unity is in Play Mode
+- Check console for detailed error logs
+
+**"Agent creates wrong objects"**  
+- ✅ **Working as designed!** Agent will self-correct
+- Vision system detects mismatches
+- Forced iteration ensures eventual success
+
+**"Unity connection failed"**
+- Ensure Unity HTTP server running on port 8080
+- Verify all 3 C# scripts attached to same GameObject
+- Check Unity Console for server startup message
+
+**"Vision analysis timeout"**
+- Unity must be in Play Mode for screenshots
+- Check Unity scene has adequate lighting
+- Verify scene has objects to analyze
+
+### **✅ Success Indicators**
+- Server starts on available port (5004+)
+- Unity Console: "Server started on http://127.0.0.1:8080/"  
+- Vision analysis returns detailed object descriptions
+- Agent completes verification loop successfully
+
+## 🎉 **System Verification**
+
+**Test with this prompt:**
+```
+"Clear the scene, then create a fox next to a green tree. Use detailed vision analysis to make sure the final result is correct"
+```
+
+**Expected behavior:**
+1. Clears existing objects
+2. Downloads fox GLB model  
+3. Creates green cylinder tree
+4. Captures scene screenshot
+5. Vision analysis describes objects
+6. Self-verification confirms success
+7. ✅ "Task completed successfully"
+
+---
+
+🚀 **Your VLM Scene Architect is ready to create, verify, and perfect 3D scenes with superhuman persistence!**

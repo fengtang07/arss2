@@ -1,13 +1,11 @@
-// SceneController.cs (Real GLB Loading)
-//
-// Professional GLB loading with safe coroutine implementation
+// SceneController.cs (Upgraded for VLM, Simulation & Queries)
 
 using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using GLTFast;
+using GLTFast; // Assuming you have GLTFast for model loading
 
 namespace ARSS.API
 {
@@ -20,6 +18,8 @@ namespace ARSS.API
         public Light directionalLight;
 
         private List<GameObject> spawnedObjects = new List<GameObject>();
+        // Used to store results from a simulation run
+        private SimulationResult currentSimResult;
 
         // Synchronous method for HTTP server to call
         public ApiResponse SpawnObject(SpawnPayload payload)
@@ -226,6 +226,104 @@ namespace ARSS.API
             }
         }
 
+        // *** 1. NEW: VISION CAPABILITY ***
+        public ApiResponse CaptureVision()
+        {
+            try
+            {
+                string visionPath = Path.Combine(Application.dataPath, "..", "scene_capture.png");
+                ScreenCapture.CaptureScreenshot(visionPath);
+                return new ApiResponse { success = true, message = $"Scene captured to {visionPath}" };
+            }
+            catch(Exception e)
+            {
+                return new ApiResponse { success = false, message = $"Vision capture failed: {e.Message}"};
+            }
+        }
+
+        // *** 2. NEW: GENERATIVE SIMULATION ***
+        public ApiResponse RunSimulation(SimulationPayload payload)
+        {
+            GameObject robot = FindObject(payload.robot_name);
+            GameObject target = FindObject(payload.target_name);
+
+            if (robot == null || target == null)
+            {
+                return new ApiResponse { success = false, message = "Could not find robot or target for simulation." };
+            }
+
+            // Ensure robot has a rigidbody to be affected by physics
+            if (robot.GetComponent<Rigidbody>() == null)
+            {
+                 robot.AddComponent<Rigidbody>();
+            }
+
+            // Start a coroutine to run the simulation
+            StartCoroutine(SimulationCoroutine(robot, target, payload.duration));
+
+            return new ApiResponse { success = true, message = "Simulation started." };
+        }
+
+        private IEnumerator SimulationCoroutine(GameObject robot, GameObject target, float duration)
+        {
+            currentSimResult = new SimulationResult { success = false, reason = "Simulation timed out." };
+            
+            // A simple "brain" for the robot: move towards the target
+            float speed = 5f;
+            float timeElapsed = 0f;
+
+            while(timeElapsed < duration)
+            {
+                robot.transform.position = Vector3.MoveTowards(robot.transform.position, target.transform.position, speed * Time.deltaTime);
+
+                // Check for success condition
+                if (Vector3.Distance(robot.transform.position, target.transform.position) < 1.0f)
+                {
+                    currentSimResult.success = true;
+                    currentSimResult.reason = "Robot reached the target.";
+                    yield break; // End the coroutine
+                }
+
+                timeElapsed += Time.deltaTime;
+                yield return null; // Wait for the next frame
+            }
+        }
+        
+        // *** 3. NEW: TWO-WAY COMMUNICATION QUERIES ***
+        public ApiResponse GetObjectPosition(QueryPayload payload)
+        {
+            GameObject obj = FindObject(payload.object_name);
+            if (obj == null)
+            {
+                return new ApiResponse { success = false, message = $"Object '{payload.object_name}' not found." };
+            }
+            return new ApiResponse { success = true, message = JsonUtility.ToJson(obj.transform.position) };
+        }
+
+        public ApiResponse ListAllObjects()
+        {
+            List<string> objectNames = new List<string>();
+            foreach(var obj in spawnedObjects)
+            {
+                objectNames.Add(obj.name);
+            }
+            return new ApiResponse { success = true, message = JsonUtility.ToJson(objectNames) };
+        }
+        
+        // Helper to find a spawned object by name
+        private GameObject FindObject(string name)
+        {
+            foreach (var obj in spawnedObjects)
+            {
+                // Using Contains allows for more flexible naming (e.g., "fox" matches "Generated_fox")
+                if (obj.name.ToLower().Contains(name.ToLower()))
+                {
+                    return obj;
+                }
+            }
+            return null;
+        }
+
         public ApiResponse SetLighting(LightingPayload payload)
         {
             if (directionalLight == null)
@@ -402,5 +500,27 @@ namespace ARSS.API
                 return 1.0f;
             }
         }
+    }
+
+    // *** NEW: DATA MODELS FOR PAYLOADS ***
+    [Serializable]
+    public class SimulationPayload
+    {
+        public string robot_name;
+        public string target_name;
+        public float duration = 10f; // default duration
+    }
+
+    [Serializable]
+    public class SimulationResult
+    {
+        public bool success;
+        public string reason;
+    }
+
+    [Serializable]
+    public class QueryPayload
+    {
+        public string object_name;
     }
 } 

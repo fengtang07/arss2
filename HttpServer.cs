@@ -1,6 +1,4 @@
-// HttpServer.cs (Simplified Fix)
-//
-// Back to basics - simpler threading that definitely works
+// HttpServer.cs (Upgraded for VLM & Two-Way Communication)
 
 using UnityEngine;
 using System;
@@ -16,7 +14,7 @@ namespace ARSS.API
         private HttpListener listener;
         private Thread listenerThread;
         private SceneController sceneController;
-        private readonly Queue<System.Action> commandQueue = new Queue<System.Action>();
+        private readonly Queue<Action> commandQueue = new Queue<Action>();
 
         void Start()
         {
@@ -35,12 +33,11 @@ namespace ARSS.API
             listenerThread.IsBackground = true;
             listenerThread.Start();
             
-            Debug.Log("[HttpServer] Server started on http://127.0.0.1:8080/");
+            Debug.Log("[HttpServer] Upgraded Server started on http://127.0.0.1:8080/");
         }
 
         void Update()
         {
-            // Process commands on the main thread
             lock (commandQueue)
             {
                 while (commandQueue.Count > 0)
@@ -59,12 +56,16 @@ namespace ARSS.API
 
         private void StartListener()
         {
-            while (true)
+            while (listener.IsListening)
             {
                 try
                 {
                     var context = listener.GetContext();
-                    ProcessRequest(context);
+                    // Enqueue the request to be processed on the main thread
+                    lock (commandQueue)
+                    {
+                        commandQueue.Enqueue(() => ProcessRequest(context));
+                    }
                 }
                 catch (Exception e) { Debug.LogError($"[HttpServer] Listener thread error: {e.Message}"); }
             }
@@ -74,57 +75,56 @@ namespace ARSS.API
         {
             var request = context.Request;
             string endpoint = request.Url.AbsolutePath.Trim('/');
-            string requestBody;
+            string requestBody = "";
 
-            using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+            if (request.HasEntityBody)
             {
-                requestBody = reader.ReadToEnd();
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                {
+                    requestBody = reader.ReadToEnd();
+                }
             }
             
             Debug.Log($"[HttpServer] Received request for endpoint '{endpoint}'");
 
-            // Queue up the action to be executed on the main thread
-            lock (commandQueue)
-            {
-                commandQueue.Enqueue(() => {
-                    HandleEndpoint(endpoint, requestBody, context);
-                });
-            }
-        }
+            ApiResponse responsePayload;
 
-        private void HandleEndpoint(string endpoint, string requestBody, HttpListenerContext context)
-        {
-            Debug.Log($"[HttpServer] Processing endpoint: {endpoint}");
-            
-            ApiResponse response;
-            
             switch (endpoint)
             {
                 case "spawn":
                     var spawnPayload = JsonUtility.FromJson<SpawnPayload>(requestBody);
-                    Debug.Log($"[HttpServer] Spawn request for: {spawnPayload.object_name}");
-                    
-                    // Call SceneController directly - it handles GLB coroutines internally
-                    response = sceneController.SpawnObject(spawnPayload);
-                    Debug.Log($"[HttpServer] Spawn response: {response.message}");
+                    responsePayload = sceneController.SpawnObject(spawnPayload);
                     break;
-
                 case "clear_scene":
-                    Debug.Log($"[HttpServer] Processing clear scene");
-                    response = sceneController.ClearScene();
+                    responsePayload = sceneController.ClearScene();
                     break;
-
                 case "set_lighting":
                     var lightingPayload = JsonUtility.FromJson<LightingPayload>(requestBody);
-                    response = sceneController.SetLighting(lightingPayload);
+                    responsePayload = sceneController.SetLighting(lightingPayload);
                     break;
-
+                // *** NEW: Vision Endpoint ***
+                case "capture_vision":
+                    responsePayload = sceneController.CaptureVision();
+                    break;
+                // *** NEW: Simulation Endpoint ***
+                case "run_simulation":
+                    var simPayload = JsonUtility.FromJson<SimulationPayload>(requestBody);
+                    responsePayload = sceneController.RunSimulation(simPayload);
+                    break;
+                // *** NEW: Query Endpoints ***
+                case "get_object_position":
+                    var queryPayload = JsonUtility.FromJson<QueryPayload>(requestBody);
+                    responsePayload = sceneController.GetObjectPosition(queryPayload);
+                    break;
+                case "list_all_objects":
+                     responsePayload = sceneController.ListAllObjects();
+                     break;
                 default:
-                    response = new ApiResponse { success = false, message = "Invalid endpoint." };
+                    responsePayload = new ApiResponse { success = false, message = "Invalid endpoint." };
                     break;
             }
             
-            SendResponse(context, response);
+            SendResponse(context, responsePayload);
         }
 
         private void SendResponse(HttpListenerContext context, ApiResponse payload)
@@ -139,7 +139,6 @@ namespace ARSS.API
                 response.ContentLength64 = buffer.Length;
                 response.OutputStream.Write(buffer, 0, buffer.Length);
                 response.OutputStream.Close();
-                Debug.Log($"[HttpServer] Response sent: {jsonResponse}");
             }
             catch (Exception e)
             {

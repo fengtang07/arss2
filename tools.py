@@ -1,4 +1,4 @@
-# tools.py
+# tools.py (Upgraded for VLM, Simulation, and Queries)
 #
 # Defines the suite of tools that the Autonomous Agent can use to interact
 # with the world (Unity, Web, GUI, Code). Each function is decorated to
@@ -9,47 +9,59 @@ import json
 import os
 from pathlib import Path
 import config
+import base64
+import pyautogui # For real GUI automation
 
-# --- Tool 1: Unity API Tool ---
-# This tool communicates with the custom API running inside the Unity Editor.
-
-def send_command_to_unity(endpoint: str, payload: dict) -> dict:
+# --- Helper Function for Unity Communication ---
+def send_command_to_unity(endpoint: str, payload: dict, method: str = "POST") -> dict:
     """Helper function to send requests to the Unity API."""
+    url = f"{config.UNITY_API_URL}/{endpoint}"
     try:
-        # Use curl as a workaround for Unity HttpServer Python compatibility issue
-        import subprocess
-        url = f"{config.UNITY_API_URL}/{endpoint}"
-        json_data = json.dumps(payload)
-        
-        curl_cmd = [
-            'curl', '-X', 'POST', url,
-            '-H', 'Content-Type: application/json',
-            '-d', json_data,
-            '-s', '-w', '%{http_code}'
-        ]
-        
-        result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=30)
-        response_text = result.stdout
-        
-        # Extract status code (last 3 characters)
-        if len(response_text) >= 3:
-            status_code = int(response_text[-3:])
-            response_body = response_text[:-3]
+        if method.upper() == "POST":
+            # Use curl as a workaround for Unity HttpServer Python compatibility issue
+            import subprocess
+            json_data = json.dumps(payload)
             
-            if status_code == 200:
-                print(f"UNITY API SUCCESS: Called endpoint '{endpoint}'. Response: {response_body}")
-                return {"success": True, "message": response_body}
+            curl_cmd = [
+                'curl', '-X', 'POST', url,
+                '-H', 'Content-Type: application/json',
+                '-d', json_data,
+                '-s', '-w', '%{http_code}'
+            ]
+            
+            result = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=15)
+            response_text = result.stdout
+            
+            # Extract status code (last 3 characters)
+            if len(response_text) >= 3:
+                status_code = int(response_text[-3:])
+                response_body = response_text[:-3]
+                
+                if status_code == 200:
+                    print(f"UNITY API SUCCESS: Called endpoint '{endpoint}'. Response: {response_body}")
+                    return {"success": True, "data": response_body}
+                else:
+                    print(f"UNITY API ERROR: Status {status_code}. Response: {response_body}")
+                    return {"success": False, "error": f"HTTP {status_code}: {response_body}"}
             else:
-                print(f"UNITY API ERROR: Status {status_code}. Response: {response_body}")
-                return {"success": False, "error": f"HTTP {status_code}: {response_body}"}
-        else:
-            return {"success": False, "error": "Invalid response from Unity"}
+                return {"success": False, "error": "Invalid response from Unity"}
+        else: # Default to GET
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                response_json = response.json()
+                print(f"UNITY API SUCCESS: Called '{endpoint}'. Response: {response_json.get('message')}")
+                return {"success": True, "data": response_json.get('message')}
+            else:
+                error_message = f"Unity API Error: Status {response.status_code} - {response.text}"
+                print(error_message)
+                return {"success": False, "error": error_message}
             
     except Exception as e:
         error_message = f"UNITY API ERROR: Failed to call endpoint '{endpoint}'. Is Unity in Play mode? Error: {e}"
         print(error_message)
         return {"success": False, "error": error_message}
 
+# --- Core Tools ---
 def spawn_object(object_name: str, position: dict, scale: dict = {"x": 1.0, "y": 1.0, "z": 1.0}, color: dict = None) -> dict:
     """
     Spawns a primitive object (cube, sphere, etc.) or a pre-existing asset/model in the Unity scene.
@@ -98,6 +110,100 @@ def attach_script_to_object(object_name: str, script_name: str) -> dict:
     """
     payload = {"object_name": object_name, "script_name": script_name}
     return send_command_to_unity("attach_script", payload)
+
+# *** 1. NEW: VLM TOOL ***
+def capture_and_analyze_scene(analysis_prompt: str) -> dict:
+    """
+    Captures the current view from the Unity camera and uses a VLM to analyze it.
+    :param analysis_prompt: The question to ask the VLM about the scene image.
+    """
+    print(f"VISION TOOL: Capturing scene from Unity...")
+    capture_result = send_command_to_unity("capture_vision", {})
+    if not capture_result["success"]:
+        return capture_result
+
+    # The image is saved to Unity's project directory, so check there first
+    image_path = Path("/Users/dullmanatee/My project/scene_capture.png")
+    if not image_path.exists():
+        # Fallback to current directory
+        image_path = Path("scene_capture.png")
+        if not image_path.exists():
+            return {"success": False, "error": "Scene was captured but the image file was not found."}
+
+    # --- REAL VLM ANALYSIS ---
+    print(f"VISION TOOL: Analyzing image with VLM. Prompt: '{analysis_prompt}'")
+    try:
+        import base64
+        from openai import OpenAI
+        from config import OPENAI_API_KEY
+        
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        
+        with open(image_path, "rb") as image_file:
+            base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+        
+        vlm_response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": analysis_prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{base64_image}"}
+                        }
+                    ]
+                }
+            ],
+            max_tokens=300
+        )
+        simulated_response = vlm_response.choices[0].message.content
+        print(f"VISION ANALYSIS RESULT: {simulated_response}")
+        
+    except Exception as e:
+        simulated_response = f"VISION ERROR: Could not analyze image - {e}"
+    
+    return {"success": True, "vlm_analysis": simulated_response}
+
+# *** 2. NEW: SIMULATION TOOL ***
+def run_simulation_and_get_results(robot_name: str, target_name: str, duration: float = 10.0) -> dict:
+    """
+    Runs a physics-based simulation in Unity and returns the outcome.
+    :param robot_name: The name of the robot object.
+    :param target_name: The name of the target object.
+    :param duration: How many seconds to run the simulation for.
+    """
+    print(f"SIMULATION TOOL: Running simulation. Robot: '{robot_name}', Target: '{target_name}'.")
+    payload = {"robot_name": robot_name, "target_name": target_name, "duration": duration}
+    return send_command_to_unity("run_simulation", payload)
+
+# *** 3. NEW: QUERY TOOLS ***
+def get_object_position(object_name: str) -> dict:
+    """Gets the current 3D world coordinates of a named object in Unity."""
+    print(f"QUERY TOOL: Getting position for '{object_name}'")
+    return send_command_to_unity("get_object_position", {"object_name": object_name})
+
+def list_all_objects() -> dict:
+    """Lists the names of all objects currently in the Unity scene."""
+    print(f"QUERY TOOL: Listing all objects in the scene.")
+    return send_command_to_unity("list_all_objects", {})
+
+# *** 4. NEW: REAL GUI AUTOMATION ***
+def click_unity_play_button() -> dict:
+    """
+    Uses GUI automation to click the 'Play' button in the Unity Editor.
+    NOTE: This is highly dependent on screen resolution and requires configuration.
+    """
+    try:
+        # User must find these coordinates manually using a tool or screenshot
+        # This is an example coordinate for a 1920x1080 screen.
+        play_button_coords = (950, 60) 
+        print(f"GUI TOOL: Clicking Unity Play button at {play_button_coords}")
+        pyautogui.click(play_button_coords)
+        return {"success": True, "message": f"Clicked screen at {play_button_coords}."}
+    except Exception as e:
+        return {"success": False, "error": f"GUI automation failed: {e}. Is pyautogui installed and configured?"}
 
 # --- Tool 2: Web Tool ---
 # This tool simulates searching for and "downloading" assets from the web.
@@ -198,8 +304,7 @@ def click_gui_element(element_description: str) -> dict:
     print(message)
     return {"success": True, "message": message}
 
-# --- Tool Definitions for OpenAI ---
-# This list maps the functions to a schema that OpenAI's API can understand.
+# --- Updated Tool Definitions for OpenAI ---
 TOOL_DEFINITIONS = [
     {
         "type": "function",
@@ -240,6 +345,58 @@ TOOL_DEFINITIONS = [
                 "properties": {"preset": {"type": "string", "enum": ["day", "night", "sunset"]}},
                 "required": ["preset"],
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "capture_and_analyze_scene",
+            "description": "Takes a picture of the Unity scene and uses a Vision-Language Model to answer a question about it. Use this to verify results or analyze the visual state.",
+            "parameters": {
+                "type": "object",
+                "properties": { "analysis_prompt": {"type": "string", "description": "The question to ask about the visual scene. E.g., 'Is the red cube on top of the blue sphere?'"} },
+                "required": ["analysis_prompt"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_simulation_and_get_results",
+            "description": "Executes a physics simulation for a set duration to see if a robot can reach a target. Generates physical data.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "robot_name": {"type": "string"},
+                    "target_name": {"type": "string"},
+                    "duration": {"type": "number", "description": "Maximum seconds to run the simulation."}
+                },
+                "required": ["robot_name", "target_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_object_position",
+            "description": "Returns the current {x, y, z} world coordinates of any object in the scene.",
+            "parameters": { "type": "object", "properties": {"object_name": {"type": "string"}}, "required": ["object_name"], },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_all_objects",
+            "description": "Returns a list of names of all objects the agent has created in the scene.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "click_unity_play_button",
+            "description": "Performs a GUI click on the Unity Editor's play button. Use this to start a simulation that requires manual starting.",
+            "parameters": {"type": "object", "properties": {}},
         },
     },
     {
@@ -318,6 +475,11 @@ AVAILABLE_TOOLS = {
     "spawn_object": spawn_object,
     "clear_scene": clear_scene,
     "set_lighting": set_lighting,
+    "capture_and_analyze_scene": capture_and_analyze_scene,
+    "run_simulation_and_get_results": run_simulation_and_get_results,
+    "get_object_position": get_object_position,
+    "list_all_objects": list_all_objects,
+    "click_unity_play_button": click_unity_play_button,
     "search_web_for_3d_model": search_web_for_3d_model,
     "download_and_import_model": download_and_import_model,
     "write_new_unity_script": write_new_unity_script,
