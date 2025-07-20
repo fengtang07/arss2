@@ -1,4 +1,4 @@
-# ARSS-2: Autonomous Robotic Scene Synthesizer
+# ARSS-2: Autonomous Scene Synthesizer Agent
 
 An advanced agentic system that leverages Vision-Language Models (VLMs) to autonomously generate and verify complex 3D scenes within the Unity engine.
 
@@ -161,6 +161,6 @@ User: "Place a realistic fox in the forest scene"
 
 ---
 
-ARSS-2 represents the cutting edge of autonomous agentic systems for 3D content generation, combining the power of large language models with real-time environmental feedback to achieve unprecedented levels of scene synthesis fidelity.
+ARSS-2 is an autonomous agentic system for 3D content generation, combining the power of large language models with real-time environmental feedback to achieve unprecedented levels of scene synthesis fidelity.
 
 **Repository:** https://github.com/fengtang07/arss2 
