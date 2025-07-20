@@ -1,0 +1,66 @@
+# VLM Project .gitignore
+
+# --- Sensitive Files ---
+# Never commit files with actual API keys
+config_local.py
+*.env
+.env
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Virtual Environments ---
+.venv/
+venv/
+ENV/
+env/
+
+# --- IDE & Editor Files ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- System Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# --- Unity Generated ---
+# (These would be in your Unity project folder, not this Python project)
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+
+# --- Downloaded Models ---
+# Optional: exclude downloaded 3D models to keep repo size small
+# Assets/ImportedModels/*.glb
+# Assets/ImportedModels/*.gltf 
