@@ -1,4 +1,4 @@
-# VLM Scene Architect
+# ARSS2 - Autonomous Robotics Scene Synthesizer
 
 A system that allows you to create 3D scenes in Unity using natural language commands powered by OpenAI's GPT-4.
 
@@ -87,4 +87,4 @@ User: "Clear the scene"
 - `vlm_scene_architect_agent.py` - Python Flask web server with OpenAI integration
 - `HttpServer.cs` - Unity HTTP server for receiving commands
 - `SceneBuilder.cs` - Unity scene manipulation logic
-- `requirements.txt` - Python dependencies 
+- `requirements.txt` - Python dependencies
